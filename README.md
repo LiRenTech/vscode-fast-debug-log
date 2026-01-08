@@ -30,12 +30,19 @@ cd vscode-fast-debug-log
 # 安装依赖
 pnpm install
 
-# 编译
+# 编译 TypeScript
 pnpm run compile
 
-# 打包
+# 打包为 VSIX 文件
+# 首先安装 vsce（如果还没有安装）
 pnpm install -g vsce
+# 或者使用 npm: npm install -g vsce
+
+# 打包扩展
 vsce package
+
+# 打包完成后会生成 vscode-fast-debug-log-0.0.1.vsix 文件
+# 可以使用上述"从 VSIX 安装"的方法安装该文件
 ```
 
 ## 🚀 使用方法
@@ -141,8 +148,12 @@ pnpm run compile
 # 监听模式（自动编译）
 pnpm run watch
 
-# 打包扩展
+# 打包扩展为 VSIX 文件
+# 确保已安装 vsce: pnpm install -g vsce
 vsce package
+
+# 打包完成后会生成 vscode-fast-debug-log-0.0.1.vsix 文件
+# 文件位置：项目根目录下
 ```
 
 ### 调试

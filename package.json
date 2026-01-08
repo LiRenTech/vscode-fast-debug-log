@@ -5,6 +5,8 @@
   "version": "0.0.1",
   "license": "MIT",
   "author": "LiRenTech",
+  "publisher": "LiRenTech",
+  "icon": "icon.png",
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -12,6 +14,10 @@
     "Other"
   ],
   "main": "./out/extension.js",
+  "activationEvents": [
+    "onCommand:vscode-fast-debug-log.addDebugLog",
+    "onCommand:vscode-fast-debug-log.removeDebugLog"
+  ],
   "contributes": {
     "commands": [
       {
