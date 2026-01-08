@@ -15,12 +15,21 @@
       {
         "command": "vscode-fast-debug-log.addDebugLog",
         "title": "🐞 fast-add-debug-log"
+      },
+      {
+        "command": "vscode-fast-debug-log.removeDebugLog",
+        "title": "🗑️ fast-remove-debug-log"
       }
     ],
     "menus": {
       "editor/context": [
         {
           "command": "vscode-fast-debug-log.addDebugLog",
+          "when": "editorHasSelection",
+          "group": "1_modification"
+        },
+        {
+          "command": "vscode-fast-debug-log.removeDebugLog",
           "when": "editorHasSelection",
           "group": "1_modification"
         }

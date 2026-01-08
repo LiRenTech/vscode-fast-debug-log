@@ -87,10 +87,168 @@ function isCompleteStatement(lineText: string, document: vscode.TextDocument, li
     return true;
 }
 
+// 检测一行是否包含 console.log 语句的开头
+function isConsoleLogStart(lineText: string): boolean {
+    const trimmed = lineText.trim();
+    // 匹配 console.log(... 或 console.warn(... 等
+    const consoleLogPattern = /^\s*console\.(log|warn|error|info|debug)\s*\(/;
+    return consoleLogPattern.test(trimmed);
+}
+
+// 查找 console.log 语句的结束位置（处理多行情况）
+function findConsoleLogEnd(document: vscode.TextDocument, startLine: number): number | null {
+    let lineNum = startLine;
+    let openParens = 0;
+    let inString = false;
+    let stringChar = '';
+    
+    while (lineNum < document.lineCount) {
+        const line = document.lineAt(lineNum);
+        const lineText = line.text;
+        
+        for (let i = 0; i < lineText.length; i++) {
+            const char = lineText[i];
+            const prevChar = i > 0 ? lineText[i - 1] : '';
+            
+            // 处理字符串
+            if (!inString && (char === '"' || char === "'" || char === '`')) {
+                inString = true;
+                stringChar = char;
+            } else if (inString && char === stringChar && prevChar !== '\\') {
+                inString = false;
+                stringChar = '';
+            }
+            
+            // 只在非字符串内计算括号
+            if (!inString) {
+                if (char === '(') {
+                    openParens++;
+                } else if (char === ')') {
+                    openParens--;
+                    if (openParens === 0) {
+                        // 找到结束位置，检查后面是否有分号
+                        const restOfLine = lineText.substring(i + 1).trim();
+                        if (restOfLine.startsWith(';') || restOfLine.length === 0) {
+                            return lineNum;
+                        }
+                    }
+                }
+            }
+        }
+        
+        lineNum++;
+    }
+    
+    return null; // 未找到结束位置
+}
+
+// 删除选中区域内的所有 console.log 语句
+async function removeDebugLogs(editor: vscode.TextEditor, document: vscode.TextDocument, selection: vscode.Selection) {
+    const startLine = selection.start.line;
+    const endLine = selection.end.line;
+    
+    const edits: vscode.TextEdit[] = [];
+    const processedLines = new Set<number>(); // 记录已处理的行，避免重复删除
+    
+    // 从前往后遍历，找到所有 console.log 语句
+    for (let lineNum = startLine; lineNum <= endLine; lineNum++) {
+        if (processedLines.has(lineNum)) {
+            continue;
+        }
+        
+        const line = document.lineAt(lineNum);
+        const lineText = line.text;
+        
+        // 检查是否包含 console.log 开头
+        if (!isConsoleLogStart(lineText)) {
+            continue;
+        }
+        
+        // 查找 console.log 语句的结束位置
+        const endLineNum = findConsoleLogEnd(document, lineNum);
+        
+        if (endLineNum !== null && endLineNum <= endLine) {
+            // 找到完整的 console.log 语句
+            const startLineObj = document.lineAt(lineNum);
+            const endLineObj = document.lineAt(endLineNum);
+            
+            // 检查整行是否只有 console.log
+            const startTrimmed = startLineObj.text.trim();
+            const endTrimmed = endLineObj.text.trim();
+            
+            if (lineNum === endLineNum) {
+                // 单行 console.log
+                if (startTrimmed.startsWith('console.') && (startTrimmed.endsWith(';') || startTrimmed.endsWith(')'))) {
+                    // 整行删除
+                    edits.push(new vscode.TextEdit(startLineObj.rangeIncludingLineBreak, ''));
+                } else {
+                    // 行内包含其他内容，尝试删除 console.log 部分
+                    const consoleLogMatch = lineText.match(/^(\s*)(.*?)(\s*console\.(log|warn|error|info|debug)\s*\([^)]*\)\s*;?\s*)(.*)$/);
+                    if (consoleLogMatch) {
+                        const before = consoleLogMatch[1] + consoleLogMatch[2];
+                        const after = consoleLogMatch[5];
+                        const newLine = before + after;
+                        if (newLine.trim().length > 0) {
+                            edits.push(new vscode.TextEdit(startLineObj.range, newLine));
+                        } else {
+                            edits.push(new vscode.TextEdit(startLineObj.rangeIncludingLineBreak, ''));
+                        }
+                    }
+                }
+            } else {
+                // 多行 console.log，删除整个范围
+                const startPos = new vscode.Position(lineNum, 0);
+                const endPos = new vscode.Position(endLineNum, endLineObj.range.end.character);
+                const range = new vscode.Range(startPos, endPos);
+                
+                // 检查开始行前面是否有其他内容
+                const beforeConsole = startLineObj.text.substring(0, startLineObj.text.indexOf('console.'));
+                if (beforeConsole.trim().length === 0) {
+                    // 整行删除，包括换行符
+                    const endLineBreakPos = new vscode.Position(endLineNum, endLineObj.rangeIncludingLineBreak.end.character);
+                    const fullRange = new vscode.Range(startPos, endLineBreakPos);
+                    edits.push(new vscode.TextEdit(fullRange, ''));
+                } else {
+                    // 只删除 console.log 部分
+                    edits.push(new vscode.TextEdit(range, ''));
+                }
+                
+                // 标记已处理的行
+                for (let i = lineNum; i <= endLineNum; i++) {
+                    processedLines.add(i);
+                }
+            }
+            
+            processedLines.add(lineNum);
+        }
+    }
+    
+    if (edits.length > 0) {
+        // 从后往前排序，避免行号变化影响
+        edits.sort((a, b) => {
+            const aStart = a.range.start.line;
+            const bStart = b.range.start.line;
+            return bStart - aStart;
+        });
+        
+        const workspaceEdit = new vscode.WorkspaceEdit();
+        workspaceEdit.set(document.uri, edits);
+        const success = await vscode.workspace.applyEdit(workspaceEdit);
+        if (success) {
+            vscode.window.showInformationMessage(`已删除 ${edits.length} 个调试日志`);
+        } else {
+            vscode.window.showErrorMessage('删除调试日志失败');
+        }
+    } else {
+        vscode.window.showInformationMessage('未找到调试日志');
+    }
+}
+
 export function activate(context: vscode.ExtensionContext) {
     console.log('恭喜，您的扩展 "vscode-fast-debug-log" 现在已激活！');
 
-    let disposable = vscode.commands.registerCommand('vscode-fast-debug-log.addDebugLog', async () => {
+    // 添加调试日志命令
+    let addDisposable = vscode.commands.registerCommand('vscode-fast-debug-log.addDebugLog', async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
             vscode.window.showWarningMessage('没有活动的编辑器');
@@ -180,7 +338,33 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    context.subscriptions.push(disposable);
+    // 删除调试日志命令
+    let removeDisposable = vscode.commands.registerCommand('vscode-fast-debug-log.removeDebugLog', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showWarningMessage('没有活动的编辑器');
+            return;
+        }
+
+        const document = editor.document;
+        const languageId = document.languageId;
+
+        // 检查文件类型
+        if (!SUPPORTED_LANGUAGES.includes(languageId)) {
+            vscode.window.showWarningMessage(`当前文件类型 ${languageId} 不支持，仅支持 js, ts, jsx, tsx 文件`);
+            return;
+        }
+
+        const selection = editor.selection;
+        if (selection.isEmpty) {
+            vscode.window.showWarningMessage('请先选择要删除调试日志的代码区域');
+            return;
+        }
+
+        await removeDebugLogs(editor, document, selection);
+    });
+
+    context.subscriptions.push(addDisposable, removeDisposable);
 }
 
 export function deactivate() {}
