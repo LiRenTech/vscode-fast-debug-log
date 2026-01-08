@@ -13,10 +13,19 @@
   "contributes": {
     "commands": [
       {
-        "command": "vscode-fast-debug-log.helloWorld",
-        "title": "Hello World"
+        "command": "vscode-fast-debug-log.addDebugLog",
+        "title": "🐞 fast-add-debug-log"
       }
-    ]
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "vscode-fast-debug-log.addDebugLog",
+          "when": "editorHasSelection",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "pnpm run compile",
