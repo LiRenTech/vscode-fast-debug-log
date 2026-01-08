@@ -24,7 +24,7 @@
 
 ```bash
 # 克隆仓库
-git clone <repository-url>
+git clone https://github.com/LiRenTech/vscode-fast-debug-log.git
 cd vscode-fast-debug-log
 
 # 安装依赖
