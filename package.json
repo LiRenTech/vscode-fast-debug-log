@@ -3,6 +3,8 @@
   "displayName": "Fast Debug Log",
   "description": "快速调试日志插件",
   "version": "0.0.1",
+  "license": "MIT",
+  "author": "LiRenTech",
   "engines": {
     "vscode": "^1.75.0"
   },
