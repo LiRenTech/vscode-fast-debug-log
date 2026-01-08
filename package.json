@@ -22,7 +22,7 @@
         {
           "command": "vscode-fast-debug-log.addDebugLog",
           "when": "editorHasSelection",
-          "group": "navigation"
+          "group": "1_modification"
         }
       ]
     }
